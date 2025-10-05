@@ -2,18 +2,21 @@ name: terraform
 
 on:
   pull_request:
-    branches: [main]
+    branches: [production]
     types: [opened, synchronize, reopened]
+
   pull_request_review:
     types: [submitted]
-    branches: [main]
+    branches: [production]
+
+  # 👇 ensure apply runs after PR is merged
   push:
-    branches: [main]
+    branches: [production]
 
 permissions:
-  id-token: write
+  id-token: write # for AWS OIDC
   contents: read
-  pull-requests: write
+  pull-requests: write # optional: if you later want to comment the plan
 
 env:
   AWS_REGION: us-east-1
@@ -26,7 +29,7 @@ concurrency:
 jobs:
   plan:
     if: github.event_name == 'pull_request'
-    name: Plan (PR → main)
+    name: Plan (PR → production)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +42,7 @@ jobs:
       - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.ROLE }}
+          role-to-assume: arn:aws:iam::058786372964:role/Internal-Infra
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
@@ -66,7 +69,7 @@ jobs:
     if: |
       github.event_name == 'pull_request_review' &&
       github.event.review.state == 'approved' &&
-      github.event.pull_request.base.ref == 'main'
+      github.event.pull_request.base.ref == 'production'
     name: Apply (on PR approval)
     runs-on: ubuntu-latest
     environment:
@@ -82,7 +85,7 @@ jobs:
       - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.ROLE }}
+          role-to-assume: arn:aws:iam::058786372964:role/Internal-Infra
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
@@ -105,9 +108,9 @@ jobs:
         run: terraform apply -input=false -auto-approve tfplan.bin
 
   apply_on_merge:
-    # Runs after the PR is merged (push to main)
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/main')
-    name: Apply (on merge to main)
+    # Runs after the PR is merged (push to production)
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/production')
+    name: Apply (on merge to production)
     runs-on: ubuntu-latest
     environment:
       name: prod
@@ -122,7 +125,7 @@ jobs:
       - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.ROLE }}
+          role-to-assume: arn:aws:iam::058786372964:role/Internal-Infra
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
