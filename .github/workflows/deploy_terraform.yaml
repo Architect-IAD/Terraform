@@ -4,7 +4,6 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened]
-
   pull_request_review:
     types: [submitted]
     branches: [main]
@@ -12,13 +11,14 @@ on:
     branches: [main]
 
 permissions:
-  id-token: write 
+  id-token: write
   contents: read
-  pull-requests: write 
+  pull-requests: write
 
 env:
   AWS_REGION: us-east-1
   TF_IN_AUTOMATION: "true"
+  ROLE: "_____"
 
 concurrency:
   group: tf-${{ github.event.pull_request.number || github.ref }}
@@ -40,7 +40,7 @@ jobs:
       - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::058786372964:role/Internal-Infra
+          role-to-assume: ${{ env.ROLE }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
@@ -83,7 +83,7 @@ jobs:
       - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::058786372964:role/Internal-Infra
+          role-to-assume: ${{ env.ROLE }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
@@ -123,7 +123,7 @@ jobs:
       - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::058786372964:role/Internal-Infra
+          role-to-assume: ${{ env.ROLE }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
