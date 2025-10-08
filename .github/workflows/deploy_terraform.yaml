@@ -3,7 +3,33 @@ name: terraform
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened, closed]  # include 'closed' so we can detect merged
+    types: [opened, synchronize, reopened, closed] # plan on open/update; apply on merged
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "DESTROY" to confirm.'
+        required: true
+      working_directory:
+        description: 'Terraform working directory (e.g., infra/ or .)'
+        required: true
+        default: '.'
+      tf_version:
+        description: 'Terraform version'
+        required: true
+        default: '1.9.5'
+      aws_region:
+        description: 'AWS region'
+        required: true
+        default: 'us-east-1'
+      aws_role_arn:
+        description: 'OIDC role ARN (leave blank to use repo var ROLE)'
+        required: false
+      workspace:
+        description: 'Terraform workspace (optional)'
+        required: false
+      var_file:
+        description: 'Optional -var-file (e.g., prod.tfvars)'
+        required: false
 
 permissions:
   id-token: write
@@ -14,9 +40,9 @@ env:
   AWS_REGION: us-east-1
   TF_IN_AUTOMATION: "true"
 
-# Serialize per PR
+# Serialize per PR (or ref when not a PR)
 concurrency:
-  group: tf-${{ github.event.pull_request.number }}
+  group: tf-${{ github.event.pull_request.number || github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -82,3 +108,66 @@ jobs:
         run: |
           terraform plan -input=false -out=tfplan.bin
           terraform apply -input=false -auto-approve tfplan.bin
+
+  destroy:
+    if: github.event_name == 'workflow_dispatch'
+    name: Destroy (manual)
+    runs-on: ubuntu-latest
+    # optional: gate via environments
+    # environment:
+    #   name: prod
+    steps:
+      - name: Safety check
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "DESTROY" ]; then
+            echo "Refusing to run: confirmation mismatch."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ github.event.inputs.tf_version }}
+
+      - name: Configure AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ github.event.inputs.aws_role_arn || vars.ROLE }}
+          aws-region: ${{ github.event.inputs.aws_region || env.AWS_REGION }}
+
+      - name: Terraform Init
+        working-directory: ${{ github.event.inputs.working_directory }}
+        run: terraform init -input=false
+
+      - name: Select/Create workspace
+        if: ${{ github.event.inputs.workspace != '' }}
+        working-directory: ${{ github.event.inputs.working_directory }}
+        run: |
+          terraform workspace select "${{ github.event.inputs.workspace }}" \
+            || terraform workspace new "${{ github.event.inputs.workspace }}"
+
+      - name: Plan (destroy)
+        id: plan
+        working-directory: ${{ github.event.inputs.working_directory }}
+        run: |
+          set -e
+          EXTRA=""
+          if [ -n "${{ github.event.inputs.var_file }}" ]; then
+            EXTRA="-var-file=${{ github.event.inputs.var_file }}"
+          fi
+          terraform plan -destroy -input=false $EXTRA -out=destroy.tfplan
+          terraform show -no-color destroy.tfplan > destroy.txt
+
+      - name: Upload destroy plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: tf-destroy-plan-${{ github.run_id }}
+          path: |
+            ${{ github.event.inputs.working_directory }}/destroy.tfplan
+            ${{ github.event.inputs.working_directory }}/destroy.txt
+
+      - name: Apply destroy
+        working-directory: ${{ github.event.inputs.working_directory }}
+        run: terraform apply -input=false -auto-approve destroy.tfplan
