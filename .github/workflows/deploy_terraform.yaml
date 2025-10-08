@@ -2,16 +2,15 @@ name: terraform
 
 on:
   pull_request:
-    branches: [production]
+    branches: [main]
     types: [opened, synchronize, reopened]
 
   pull_request_review:
     types: [submitted]
-    branches: [production]
+    branches: [main]
 
-  # 👇 ensure apply runs after PR is merged
   push:
-    branches: [production]
+    branches: [main]
 
 permissions:
   id-token: write # for AWS OIDC
@@ -29,7 +28,7 @@ concurrency:
 jobs:
   plan:
     if: github.event_name == 'pull_request'
-    name: Plan (PR → production)
+    name: Plan (PR → main)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -69,7 +68,7 @@ jobs:
     if: |
       github.event_name == 'pull_request_review' &&
       github.event.review.state == 'approved' &&
-      github.event.pull_request.base.ref == 'production'
+      github.event.pull_request.base.ref == 'main'
     name: Apply (on PR approval)
     runs-on: ubuntu-latest
     environment:
@@ -108,9 +107,9 @@ jobs:
         run: terraform apply -input=false -auto-approve tfplan.bin
 
   apply_on_merge:
-    # Runs after the PR is merged (push to production)
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/production')
-    name: Apply (on merge to production)
+    # Runs after the PR is merged (push to main)
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/main')
+    name: Apply (on merge to main)
     runs-on: ubuntu-latest
     environment:
       name: prod
