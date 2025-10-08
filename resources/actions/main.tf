@@ -30,8 +30,10 @@ resource "aws_iam_role" "gh_roles" {
         "Action" : "sts:AssumeRoleWithWebIdentity",
         "Condition" : {
           "StringEquals" : {
-            "token.actions.githubusercontent.com:sub" : "repo: <${var.org}/${var.repo}>:*",
             "token.actions.githubusercontent.com:aud" : "sts.amazonaws.com"
+          },
+          "StringLike": {
+            "token.actions.githubusercontent.com:sub" : "repo:${var.org}/${var.repo}:*",
           }
         }
       }

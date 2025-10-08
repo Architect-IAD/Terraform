@@ -6,7 +6,7 @@ terraform {
   }
 }
 
-data "aws_organizations_organizational_unit" "closed_ou" {
+resource "aws_organizations_organizational_unit" "closed_ou" {
   parent_id = var.org_id
   name      = "closed_accounts"
 }
