@@ -3,31 +3,29 @@ name: terraform
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened]
-
-  pull_request_review:
-    types: [submitted]
-    branches: [main]
-
-  push:
-    branches: [main]
+    types: [opened, synchronize, reopened, closed]  # include 'closed' so we can detect merged
 
 permissions:
-  id-token: write # for AWS OIDC
+  id-token: write
   contents: read
-  pull-requests: write # optional: if you later want to comment the plan
+  pull-requests: write
 
 env:
   AWS_REGION: us-east-1
   TF_IN_AUTOMATION: "true"
 
+# Serialize per PR
 concurrency:
-  group: tf-${{ github.event.pull_request.number || github.ref }}
+  group: tf-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   plan:
-    if: github.event_name == 'pull_request'
+    if: >
+      github.event_name == 'pull_request' &&
+      (github.event.action == 'opened' ||
+       github.event.action == 'synchronize' ||
+       github.event.action == 'reopened')
     name: Plan (PR → main)
     runs-on: ubuntu-latest
     steps:
@@ -41,7 +39,7 @@ jobs:
       - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::058786372964:role/Internal-Infra
+          role-to-assume: ${{ vars.role }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
@@ -51,65 +49,15 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
-        id: plan
-        run: |
-          terraform plan -input=false -out=tfplan.bin
-          terraform show -no-color tfplan.bin > tfplan.txt
-
-      - name: Upload plan artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tfplan-${{ github.event.pull_request.number }}
-          path: |
-            tfplan.bin
-            tfplan.txt
-
-  apply_on_approval:
-    if: |
-      github.event_name == 'pull_request_review' &&
-      github.event.review.state == 'approved' &&
-      github.event.pull_request.base.ref == 'main'
-    name: Apply (on PR approval)
-    runs-on: ubuntu-latest
-    environment:
-      name: prod
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.9.5
-
-      - name: Configure AWS (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::058786372964:role/Internal-Infra
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init
-        run: terraform init -input=false
-
-      # Try to reuse the plan from the PR job; fall back to fresh plan.
-      - name: Try download plan artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: tfplan-${{ github.event.pull_request.number }}
-        continue-on-error: true
-
-      - name: Plan (fresh) if no artifact
-        run: |
-          if [ ! -f tfplan.bin ]; then
-            terraform plan -input=false -out=tfplan.bin
-          fi
-
-      - name: Apply
-        run: terraform apply -input=false -auto-approve tfplan.bin
+        run: terraform plan -input=false
 
   apply_on_merge:
-    # Runs after the PR is merged (push to main)
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/main')
-    name: Apply (on merge to main)
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main'
+    name: Apply (on PR merge to main)
     runs-on: ubuntu-latest
     environment:
       name: prod
@@ -124,7 +72,7 @@ jobs:
       - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::058786372964:role/Internal-Infra
+          role-to-assume: ${{ vars.role }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Terraform Init
