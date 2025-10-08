@@ -49,15 +49,9 @@ resource "aws_organizations_organizational_unit" "non_production" {
   parent_id = local.org_id
 }
 
-resource "aws_organizations_organizational_unit" "closed_ou" {
-  name      = "closed_accounts"
-  parent_id = local.org_id
-}
-
 # ------------------------------ Accounts (Environments) ------------------------------
 
 module "production_account" {
-  depends_on             = [aws_organizations_organizational_unit.closed_ou]
   source                 = "../account"
   name                   = var.production_name
   email                  = local.production_email
@@ -66,7 +60,6 @@ module "production_account" {
 }
 
 module "non_production_accounts" {
-  depends_on             = [aws_organizations_organizational_unit.closed_ou]
   source                 = "../account"
   for_each               = local.non_prod_environments
   name                   = each.value.name
