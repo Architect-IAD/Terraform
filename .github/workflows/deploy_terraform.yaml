@@ -30,6 +30,10 @@ on:
       var_file:
         description: 'Optional -var-file (e.g., prod.tfvars)'
         required: false
+      target:
+        description: 'Optional Terraform target(s) to destroy (e.g., module.edge or module.edge.aws_cloudfront_distribution.this). Separate multiple with commas/spaces/newlines.'
+        required: false
+        default: ''
 
 permissions:
   id-token: write
@@ -113,9 +117,6 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     name: Destroy (manual)
     runs-on: ubuntu-latest
-    # optional: gate via environments
-    # environment:
-    #   name: prod
     steps:
       - name: Safety check
         run: |
@@ -151,13 +152,30 @@ jobs:
       - name: Plan (destroy)
         id: plan
         working-directory: ${{ github.event.inputs.working_directory }}
+        shell: bash
         run: |
-          set -e
-          EXTRA=""
+          set -euo pipefail
+          EXTRA=()
           if [ -n "${{ github.event.inputs.var_file }}" ]; then
-            EXTRA="-var-file=${{ github.event.inputs.var_file }}"
+            EXTRA+=("-var-file=${{ github.event.inputs.var_file }}")
           fi
-          terraform plan -destroy -input=false $EXTRA -out=destroy.tfplan
+
+          # Build -target flags (supports comma/space/newline separated)
+          TARGET_INPUT="${{ github.event.inputs.target }}"
+          TARGET_FLAGS=()
+          if [ -n "$TARGET_INPUT" ]; then
+            echo "Targets requested:"
+            # Normalize separators to newlines, trim empties
+            echo "$TARGET_INPUT" | tr ', ' '\n\n' | tr -s '\n' | while IFS= read -r line; do
+              t="$(echo "$line" | xargs)"        # trim
+              if [ -n "$t" ]; then
+                echo "  - $t"
+                TARGET_FLAGS+=("-target=$t")
+              fi
+            done
+          fi
+
+          terraform plan -destroy -input=false "${EXTRA[@]}" "${TARGET_FLAGS[@]}" -out=destroy.tfplan
           terraform show -no-color destroy.tfplan > destroy.txt
 
       - name: Upload destroy plan
