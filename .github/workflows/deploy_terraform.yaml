@@ -155,27 +155,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          EXTRA=()
+
+          # Optional -var-file
+          EXTRA=""
           if [ -n "${{ github.event.inputs.var_file }}" ]; then
-            EXTRA+=("-var-file=${{ github.event.inputs.var_file }}")
+            EXTRA="-var-file=${{ github.event.inputs.var_file }}"
           fi
 
-          # Build -target flags (supports comma/space/newline separated)
-          TARGET_INPUT="${{ github.event.inputs.target }}"
-          TARGET_FLAGS=()
-          if [ -n "$TARGET_INPUT" ]; then
-            echo "Targets requested:"
-            # Normalize separators to newlines, trim empties
-            echo "$TARGET_INPUT" | tr ', ' '\n\n' | tr -s '\n' | while IFS= read -r line; do
-              t="$(echo "$line" | xargs)"        # trim
-              if [ -n "$t" ]; then
-                echo "  - $t"
-                TARGET_FLAGS+=("-target=$t")
-              fi
+          # Optional -target flags (supports commas, spaces, or newlines)
+          TARGET_FLAGS=""
+          if [ -n "${{ github.event.inputs.target }}" ]; then
+            for t in $(printf '%s' "${{ github.event.inputs.target }}" | tr ',\t\r\n' '    '); do
+              [ -n "$t" ] && TARGET_FLAGS="$TARGET_FLAGS -target=$t"
             done
           fi
 
-          terraform plan -destroy -input=false "${EXTRA[@]}" "${TARGET_FLAGS[@]}" -out=destroy.tfplan
+          echo "terraform plan -destroy -input=false $EXTRA $TARGET_FLAGS -out=destroy.tfplan"
+          terraform plan -destroy -input=false $EXTRA $TARGET_FLAGS -out=destroy.tfplan
           terraform show -no-color destroy.tfplan > destroy.txt
 
       - name: Upload destroy plan
