@@ -21,8 +21,8 @@ variable "domain_validation_options" {
 
 resource "aws_route53_record" "cert_validation" {
   for_each = {
-    for dvo in var.domain_validation_options :
-    dvo.resource_record_name => {
+    for i, dvo in var.domain_validation_options :
+    i => {
       name  = dvo.resource_record_name
       type  = dvo.resource_record_type
       value = dvo.resource_record_value
@@ -30,11 +30,12 @@ resource "aws_route53_record" "cert_validation" {
   }
 
   zone_id = data.aws_route53_zone.default.zone_id
+  
   name    = each.value.name
   type    = each.value.type
-  ttl     = 60
   records = [each.value.value]
   
+  ttl     = 60
   allow_overwrite = true
 }
 
