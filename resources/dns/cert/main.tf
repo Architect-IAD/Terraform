@@ -21,26 +21,21 @@ variable "domain_validation_options" {
 
 resource "aws_route53_record" "cert_validation" {
   for_each = {
-    for i, dvo in var.domain_validation_options :
-    i => {
-      name  = dvo.resource_record_name
-      type  = dvo.resource_record_type
-      value = dvo.resource_record_value
-    }
+    for dvo in var.domain_validation_options :
+    "${dvo.resource_record_name}|${dvo.resource_record_type}" => dvo...
   }
 
   zone_id = data.aws_route53_zone.default.zone_id
-  
-  name    = each.value.name
-  type    = each.value.type
-  records = [each.value.value]
-  
+  name    = split("|", each.key)[0]
+  type    = split("|", each.key)[1]
   ttl     = 60
+
+  # Use the first group's value (they're typically identical)
+  records = [each.value[0].resource_record_value]
+
   allow_overwrite = true
 }
 
 output "validation_records" {
   value = [for r in aws_route53_record.cert_validation : r.fqdn]
 }
-
-
