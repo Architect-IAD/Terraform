@@ -38,7 +38,6 @@ data "aws_iam_policy_document" "ses_put" {
       identifiers = ["ses.amazonaws.com"]
     }
 
-    # Limit to this account (per AWS docs for SES->S3 action)
     condition {
       test     = "StringEquals"
       variable = "aws:Referer"
@@ -80,7 +79,6 @@ resource "aws_ses_receipt_rule" "per_address" {
   s3_action {
     position    = 1
     bucket_name = aws_s3_bucket.mail.bucket
-    # optional: object_key_prefix = "inbound/"
   }
 
   scan_enabled = true

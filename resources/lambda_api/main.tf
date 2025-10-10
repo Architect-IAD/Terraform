@@ -22,7 +22,7 @@ variable "config" {
     memory = optional(number)
   })
   default = {
-    memory = 512
+    memory = 1024
   }
   nullable = true
 }
@@ -69,7 +69,7 @@ resource "aws_iam_role_policy_attachment" "attach" {
 
 data "archive_file" "lambda" {
   type        = "zip"
-  source_dir  = "${path.module}/build" # zips the contents, not the folder
+  source_dir  = "${path.module}/build"
   output_path = "${path.module}/build.zip"
 }
 
@@ -104,6 +104,7 @@ module "action" {
 resource "aws_lambda_function_url" "public" {
   function_name      = aws_lambda_function.default.function_name
   authorization_type = "NONE"
+  invoke_mode        = "RESPONSE_STREAM"
 }
 
 resource "aws_lambda_permission" "public_url_invoke" {
