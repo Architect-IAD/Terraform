@@ -80,8 +80,6 @@ resource "aws_cloudfront_distribution" "cdn" {
       origin_id   = origin.value.name
       domain_name = replace(replace(origin.value.domain, "https://", ""), "/", "")
 
-      response_completion_timeout = 120
-
       custom_origin_config {
         http_port              = 80
         https_port             = 443
