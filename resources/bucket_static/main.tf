@@ -10,19 +10,19 @@ variable "bucket_name" {
   type = string
 }
 
-variable "git" {
-  type = object({
-    repo = string
-    org  = string
-  })
-}
-
 resource "random_string" "five" {
   length  = 5
   upper   = true
   lower   = true
   numeric = true
   special = false
+}
+
+variable "accessors" {
+  type = list(object({
+    role_name = string
+    actions   = list(string)
+  }))
 }
 
 locals {
@@ -60,19 +60,31 @@ data "aws_iam_policy_document" "s3_read_from_cf" {
   }
 }
 
+resource "aws_iam_policy" "accessors" {
+  for_each = { for i, v in var.accessors : i => v }
+  policy = jsonencode({
+    "Version" : "2012-10-17",
+    "Statement" : [
+      {
+        "Effect" : "Allow",
+        "Action" : each.value.actions,
+        "Resource" : [
+          "${aws_s3_bucket.default.arn}/*"
+        ]
+      },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "attach_accessors" {
+  for_each   = { for i, v in var.accessors : i => v }
+  role       = each.value.role_name
+  policy_arn = aws_iam_policy.accessors[each.key].arn
+}
+
 resource "aws_s3_bucket_policy" "this" {
   bucket = aws_s3_bucket.default.id
   policy = data.aws_iam_policy_document.s3_read_from_cf.json
-}
-
-module "action" {
-  source = "../actions"
-  repo   = var.git.repo
-  org    = var.git.org
-  policy = {
-    resource_arn  = aws_s3_bucket.default.arn
-    update_action = "s3:PutObject"
-  }
 }
 
 output "cf_config" {

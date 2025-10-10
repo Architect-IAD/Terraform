@@ -60,15 +60,16 @@ resource "aws_cloudfront_cache_policy" "no_cache" {
 resource "aws_cloudfront_distribution" "cdn" {
   enabled = true
   comment = local.prefix
+  
 
   dynamic "origin" {
     for_each = var.buckets
     content {
       origin_id   = origin.value.name
       domain_name = origin.value.domain
-
+  
       s3_origin_config {
-        origin_access_identity = "origin-access-identity/cloudfront/${origin.value.oai_id}"
+        origin_access_identity = "origin-access-identity/cloudfront/${origin.value.oai_id}"    
       }
     }
   }
@@ -78,6 +79,8 @@ resource "aws_cloudfront_distribution" "cdn" {
     content {
       origin_id   = origin.value.name
       domain_name = replace(replace(origin.value.domain, "https://", ""), "/", "")
+
+      response_completion_timeout = 120
 
       custom_origin_config {
         http_port              = 80

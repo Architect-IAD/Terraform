@@ -10,13 +10,6 @@ variable "name" {
   type = string
 }
 
-variable "git" {
-  type = object({
-    repo = string
-    org  = string
-  })
-}
-
 variable "config" {
   type = object({
     memory = optional(number)
@@ -25,6 +18,13 @@ variable "config" {
     memory = 1024
   }
   nullable = true
+}
+
+variable "accessors" {
+  type = list(object({
+    role_name = string
+    actions   = list(string)
+  }))
 }
 
 locals {
@@ -67,6 +67,28 @@ resource "aws_iam_role_policy_attachment" "attach" {
   policy_arn = aws_iam_policy.default.arn
 }
 
+resource "aws_iam_policy" "accessors" {
+  for_each = { for i, v in var.accessors : i => v }
+  policy = jsonencode({
+    "Version" : "2012-10-17",
+    "Statement" : [
+      {
+        "Effect" : "Allow",
+        "Action" : each.value.actions,
+        "Resource" : [
+          aws_lambda_function.default.arn,
+        ]
+      },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "attach_accessors" {
+  for_each   = { for i, v in var.accessors : i => v }
+  role       = each.value.role_name
+  policy_arn = aws_iam_policy.accessors[each.key].arn
+}
+
 data "archive_file" "lambda" {
   type        = "zip"
   source_dir  = "${path.module}/build"
@@ -79,6 +101,7 @@ resource "aws_lambda_function" "default" {
   handler       = "index.handler"
   runtime       = "nodejs20.x"
   memory_size   = var.config.memory
+  timeout       = 900
 
   filename         = data.archive_file.lambda.output_path
   source_code_hash = data.archive_file.lambda.output_base64sha256
@@ -88,16 +111,6 @@ resource "aws_lambda_function" "default" {
       filename,
       source_code_hash,
     ]
-  }
-}
-
-module "action" {
-  source = "../actions"
-  repo   = var.git.repo
-  org    = var.git.org
-  policy = {
-    resource_arn  = aws_lambda_function.default.arn
-    update_action = "lambda:UpdateFunctionCode"
   }
 }
 
