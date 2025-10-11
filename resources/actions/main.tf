@@ -13,6 +13,11 @@ variable "git" {
   })
 }
 
+variable "access" {
+  type = list(string)
+  default = []
+}
+
 data "aws_iam_openid_connect_provider" "example" {
   url = "https://token.actions.githubusercontent.com"
 }
@@ -39,6 +44,26 @@ resource "aws_iam_role" "gh_role" {
       }
     ]
   })
+}
+
+resource "aws_iam_policy" "accessors" {
+  count = length(var.access) > 0 ? 1 : 0
+  policy = jsonencode({
+    "Version" : "2012-10-17",
+    "Statement" : [
+      {
+        "Effect" : "Allow",
+        "Action" : var.access,
+        "Resource" : ["*"]
+      },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "attach_accessor" {
+  count = length(var.access) > 0 ? 1 : 0
+  role       = aws_iam_role.gh_role.name
+  policy_arn = aws_iam_policy.accessors[0].arn
 }
 
 output "role_name" {
