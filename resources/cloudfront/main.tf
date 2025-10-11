@@ -61,7 +61,6 @@ resource "aws_cloudfront_distribution" "cdn" {
   enabled = true
   comment = local.prefix
   
-
   dynamic "origin" {
     for_each = var.buckets
     content {
@@ -160,6 +159,28 @@ resource "aws_cloudfront_distribution" "cdn" {
   aliases = [var.domain]
 }
 
+resource "aws_iam_policy" "accessors" {
+  for_each = { for i, v in var.accessors : i => v }
+  policy = jsonencode({
+    "Version" : "2012-10-17",
+    "Statement" : [
+      {
+        "Effect" : "Allow",
+        "Action" : each.value.actions,
+        "Resource" : [
+          aws_cloudfront_distribution.cdn.arn,
+        ]
+      },
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "attach_accessors" {
+  for_each   = { for i, v in var.accessors : i => v }
+  role       = each.value.role_name
+  policy_arn = aws_iam_policy.accessors[each.key].arn
+}
+
 output "dns" {
   value = {
     name    = aws_cloudfront_distribution.cdn.domain_name
@@ -167,3 +188,4 @@ output "dns" {
     domain  = var.domain
   }
 }
+

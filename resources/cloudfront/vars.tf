@@ -40,3 +40,10 @@ variable "domain" {
 variable "cert_arn" {
   type = string
 }
+
+variable "accessors" {
+  type = list(object({
+    role_name = string
+    actions   = list(string)
+  }))
+}
