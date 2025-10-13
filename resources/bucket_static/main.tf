@@ -10,14 +10,6 @@ variable "bucket_name" {
   type = string
 }
 
-resource "random_string" "five" {
-  length  = 5
-  upper   = true
-  lower   = true
-  numeric = true
-  special = false
-}
-
 variable "accessors" {
   type = list(object({
     role_name = string
@@ -25,12 +17,8 @@ variable "accessors" {
   }))
 }
 
-locals {
-  bucket_name = lower("Bucket-${var.bucket_name}-${random_string.five.result}")
-}
-
 resource "aws_s3_bucket" "default" {
-  bucket        = local.bucket_name
+  bucket        = var.bucket_name
   force_destroy = true
 }
 
@@ -89,7 +77,7 @@ resource "aws_s3_bucket_policy" "this" {
 
 output "cf_config" {
   value = {
-    name   = local.bucket_name
+    name   = var.bucket_name
     domain = aws_s3_bucket.default.bucket_regional_domain_name
     oai_id = aws_cloudfront_origin_access_identity.oai.id
   }
